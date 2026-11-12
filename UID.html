@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PitchSide - Register New Scout</title>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 20px; max-width: 600px; margin: 0 auto; }
+
+        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-bottom: 20px; }
+        h2 { color: #38bdf8; margin-bottom: 6px; font-size: 1.2rem; text-align: center; }
+        .subtitle { font-size: 0.8rem; color: var(--text-muted); text-align: center; margin-bottom: 16px; text-transform: uppercase; }
+
+        .input-group { margin-bottom: 14px; }
+        .input-group label { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; font-weight: bold; }
+        .input-group input { width: 100%; background: #0f172a; border: 1px solid var(--border-color); color: white; padding: 10px; border-radius: 6px; font-size: 0.95rem; }
+
+        .btn-primary { width: 100%; background: #2563eb; color: white; padding: 12px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; font-size: 0.95rem; text-transform: uppercase; margin-top: 6px; }
+        .btn-secondary { width: 100%; background: #475569; color: white; padding: 10px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; font-size: 0.85rem; text-align: center; display: block; text-decoration: none; margin-top: 10px; }
+        
+        .success-box { background: #065f46; color: #34d399; padding: 12px; border-radius: 6px; font-size: 0.85rem; text-align: center; margin-bottom: 14px; font-weight: bold; display: none; word-break: break-all; border: 1px solid #059669; }
+        
+        .debug-box { background: #000; color: #38bdf8; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; margin-top: 10px; max-height: 120px; overflow-y: auto; border: 1px solid var(--border-color); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+        th { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+        button:active { opacity: 0.8; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Register New Scout</h2>
+        <div class="subtitle">Create independent login credentials</div>
+
+        <!-- Success Message Banner -->
+        <div id="successMessage" class="success-box"></div>
+
+        <div class="input-group">
+            <label>Scout Email</label>
+            <input type="email" id="scoutEmail" placeholder="ravish@pitchside.com">
+        </div>
+        
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" id="scoutPassword" placeholder="••••••••">
+        </div>
+
+        <button class="btn-primary" id="registerBtn">Create Scout Account</button>
+        <a href="index.html" class="btn-secondary">Back to Admin Dashboard</a>
+    </div>
+
+    <!-- REGISTERED SCOUTS LOG TABLE -->
+    <div class="card">
+        <h2>Registered Scouts Directory</h2>
+        <div class="subtitle">Live log of active scout accounts</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Email / Password</th>
+                    <th>Scout UID</th>
+                    <th style="text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody id="scoutLogTable">
+                <tr><td colspan="3" style="color: var(--text-muted); text-align: center;">Initializing...</td></tr>
+            </tbody>
+        </table>
+        <!-- On-screen debug console -->
+        <div id="debugLog" class="debug-box">System starting...</div>
+    </div>
+
+    <script>
+        const debugLog = document.getElementById('debugLog');
+        function log(msg) {
+            console.log(msg);
+            debugLog.innerHTML += `<br>> ${msg}`;
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+
+        try {
+            const firebaseConfig = {
+                apiKey: "AIzaSyDfx9vKrOJ2udbREFfyIBg5E-JZQlAs1e8",
+                authDomain: "pitchside-football-scout.firebaseapp.com",
+                databaseURL: "https://pitchside-football-scout-default-rtdb.asia-southeast1.firebasedatabase.app",
+                projectId: "pitchside-football-scout",
+                storageBucket: "pitchside-football-scout.firebasestorage.app",
+                messagingSenderId: "895064245527",
+                appId: "1:895064245527:web:e81f722d26ffccd1db6352",
+                measurementId: "G-DQQV4C8QLR"
+            };
+
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+                log("Firebase initialized successfully.");
+            } else {
+                log("Firebase app already active.");
+            }
+
+            const auth = firebase.auth();
+            const db = firebase.database();
+
+            // --- REGISTER SCOUT BUTTON EVENT ---
+            document.getElementById('registerBtn').addEventListener('click', () => {
+                const email = document.getElementById('scoutEmail').value.trim();
+                const password = document.getElementById('scoutPassword').value.trim();
+                const successBox = document.getElementById('successMessage');
+
+                successBox.style.display = 'none';
+
+                if (!email || !password) {
+                    alert("Please enter both an email and a password.");
+                    return;
+                }
+
+                log(`Attempting to register: ${email}...`);
+
+                auth.createUserWithEmailAndPassword(email, password)
+                    .then((userCredential) => {
+                        const uid = userCredential.user.uid;
+                        log(`Auth Success! UID: ${uid}`);
+                        
+                        successBox.style.display = 'block';
+                        successBox.innerHTML = `✅ Account created successfully!<br><span style="font-size:0.75rem;">UID: ${uid}</span>`;
+                        
+                        db.ref(`registered_scouts/${uid}`).set({
+                            email: email,
+                            password: password,
+                            createdAt: Date.now()
+                        }).then(() => {
+                            log("Saved scout credentials to database.");
+                        }).catch(dbErr => {
+                            log("Database Write Error: " + dbErr.message);
+                        });
+
+                        document.getElementById('scoutEmail').value = '';
+                        document.getElementById('scoutPassword').value = '';
+                    })
+                    .catch((error) => {
+                        log("Auth Error: " + error.message);
+                        alert("Firebase Auth Error: " + error.message);
+                    });
+            });
+
+            // --- DELETE SCOUT FUNCTION ---
+            window.deleteScout = function(uid) {
+                if (confirm("Are you sure you want to delete this scout account?")) {
+                    log(`Deleting scout ${uid}...`);
+                    db.ref(`registered_scouts/${uid}`).remove()
+                        .then(() => {
+                            log(`Scout ${uid} deleted successfully from database.`);
+                        })
+                        .catch((error) => {
+                            log("Delete Error: " + error.message);
+                            alert("Error deleting scout: " + error.message);
+                        });
+                }
+            };
+
+            // --- DATABASE LISTENER & RENDER TABLE ---
+            const tableBody = document.getElementById('scoutLogTable');
+            log("Setting up database listener...");
+
+            db.ref('registered_scouts').on('value', (snapshot) => {
+                const scouts = snapshot.val();
+                tableBody.innerHTML = '';
+
+                if (!scouts) {
+                    tableBody.innerHTML = '<tr><td colspan="3" style="color: var(--text-muted); text-align: center;">No scout accounts registered yet.</td></tr>';
+                    log("Database Read: No scouts found.");
+                    return;
+                }
+
+                log(`Database Read: Found ${Object.keys(scouts).length} scout(s).`);
+                Object.keys(scouts).forEach((uid) => {
+                    const s = scouts[uid];
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>
+                            <strong>${s.email || 'N/A'}</strong><br>
+                            <span style="color: #38bdf8; font-size: 0.75rem;">Password: ${s.password || 'N/A'}</span>
+                        </td>
+                        <td><span style="font-family: monospace; color: #cbd5e1; font-size: 0.75rem;">${uid}</span></td>
+                        <td style="text-align: right;">
+                            <button onclick="deleteScout('${uid}')" style="background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; padding: 6px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; cursor: pointer;">Delete</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            }, (error) => {
+                log("Database Read Error: " + error.message);
+                tableBody.innerHTML = `<tr><td colspan="3" style="color: #ef4444; text-align: center;">DB Error: ${error.message}</td></tr>`;
+            });
+
+        } catch (err) {
+            log("Fatal Error: " + err.message);
+        }
+    </script>
+</body>
+</html>

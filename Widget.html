@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PitchSide Live Match & Statistics Widget</title>
+    
+    <!-- Firebase SDKs for Cloud Realtime Sync -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: #090d16; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 12px; }
+
+        .widget-card {
+            width: 100%;
+            max-width: 480px;
+            background: #131b2e;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #1e293b;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+        }
+
+        .tournament-header {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+            text-align: center;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Dropdown Menu Style */
+        .widget-nav-select {
+            background: #0f172a;
+            color: #38bdf8;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .live-status-bar {
+            background: #0f172a;
+            color: #22c55e;
+            text-align: center;
+            padding: 6px;
+            font-size: 0.75rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #1e293b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .live-dot {
+            height: 7px;
+            width: 7px;
+            background-color: #4ade80;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 6px #4ade80;
+        }
+
+        /* View Containers */
+        .widget-view { display: none; }
+        .widget-view.active { display: block; }
+
+        /* LIVE MATCH VIEW STYLES */
+        .scoreboard-section {
+            background: #ffffff;
+            color: #0f172a;
+            padding: 18px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .teams-row {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            gap: 4px;
+        }
+
+        .team-box {
+            flex: 1;
+            text-align: center;
+            padding: 0 4px;
+        }
+
+        .team-name {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: #1e293b;
+            line-height: 1.3;
+            text-transform: uppercase;
+            word-break: break-word;
+        }
+
+        .score-display-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 8px;
+        }
+
+        .score-badge {
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            color: #0f172a;
+            font-family: monospace;
+            white-space: nowrap;
+        }
+
+        .timer-badge {
+            background: #0f172a;
+            color: #4ade80;
+            font-size: 0.85rem;
+            font-weight: 800;
+            padding: 5px 16px;
+            border-radius: 20px;
+            letter-spacing: 1px;
+            font-family: monospace;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        .feed-section {
+            background: #dc2626;
+            color: white;
+            padding: 14px 16px;
+        }
+
+        .feed-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.95;
+        }
+
+        .latest-event {
+            font-size: 0.95rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        /* STATISTICS VIEW STYLES */
+        .stats-section {
+            background: #0f172a;
+            padding: 16px;
+        }
+
+        .stats-teams-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        .stats-team-tag {
+            font-size: 0.8rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border-radius: 4px;
+            color: white;
+        }
+        .stats-score-tag { font-size: 1.1rem; font-weight: 900; font-family: monospace; color: #4ade80; }
+
+        .stat-row {
+            margin-bottom: 10px;
+        }
+
+        .stat-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            font-weight: 800;
+            font-family: monospace;
+            margin-bottom: 3px;
+            color: #94a3b8;
+        }
+
+        .stat-name {
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #cbd5e1;
+            margin-bottom: 2px;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-bar-bg {
+            background: #1e293b;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .stat-bar-home {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .stat-bar-away {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="widget-card">
+        <!-- Tournament Header with Dropdown Navigation Menu -->
+        <div class="tournament-header">
+            <span id="tournamentTitle">Goa League</span>
+            <select class="widget-nav-select" id="viewSelector" onchange="switchWidgetView(this.value)">
+                <option value="live">📺 Live Match</option>
+                <option value="stats">📊 Statistics</option>
+            </select>
+        </div>
+
+        <div class="live-status-bar">
+            <span class="live-dot"></span> LIVE MATCH BROADCAST
+        </div>
+
+        <!-- VIEW 1: LIVE MATCH VIEW -->
+        <div class="widget-view active" id="liveView">
+            <div class="scoreboard-section">
+                <div class="teams-row">
+                    <div class="team-box">
+                        <div class="team-name" id="widgetHomeName">Home</div>
+                    </div>
+                    <div class="score-display-container">
+                        <div class="score-badge" id="widgetScore">0-0</div>
+                    </div>
+                    <div class="team-box">
+                        <div class="team-name" id="widgetAwayName">Away</div>
+                    </div>
+                </div>
+
+                <div class="timer-badge" id="widgetTimer">00:00</div>
+            </div>
+
+            <div class="feed-section">
+                <div class="feed-title-row">
+                    <span>Live Feed Update</span>
+                    <span><span class="live-dot"></span> ACTIVE</span>
+                </div>
+                <div class="latest-event" id="widgetLatestEvent">Connecting to live match...</div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: STATISTICS VIEW -->
+        <div class="widget-view" id="statsView">
+            <div class="stats-section">
+                <div class="stats-teams-header">
+                    <div class="stats-team-tag" id="statHomeLabel">Home</div>
+                    <div class="stats-score-tag" id="statScoreDisplay">0 - 0</div>
+                    <div class="stats-team-tag" id="statAwayLabel">Away</div>
+                </div>
+
+                <!-- Ball Possession % -->
+                <div class="stat-row">
+                    <div class="stat-name">Ball Possession %</div>
+                    <div class="stat-labels"><span id="homePossession">50%</span><span id="awayPossession">50%</span></div>
+                    <div class="stat-bar-bg">
+                        <div class="stat-bar-home" id="homePossessionBar" style="width: 50%;"></div>
+                        <div class="stat-bar-away" id="awayPossessionBar" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Shots -->
+                <div class="stat-row">
+                    <div class="stat-name">Total Shots</div>
+                    <div class="stat-labels"><span id="homeShots">0</span><span id="awayShots">0</span></div>
+                    <div class="stat-bar-bg">
+                        <div class="stat-bar-home" id="homeShotsBar" style="width: 50%;"></div>
+                        <div class="stat-bar-away" id="awayShotsBar" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Shots on Target -->
+                <div class="stat-row">
+                    <div class="stat-name">Shots on Target</div>
+                    <div class="stat-labels"><span id="homeShotsOn">0</span><span id="awayShotsOn">0</span></div>
+                    <div class="stat-bar-bg">
+                        <div class="stat-bar-home" id="homeShotsOnBar" style="width: 50%;"></div>
+                        <div class="stat-bar-away" id="awayShotsOnBar" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Corners -->
+                <div class="stat-row">
+                    <div class="stat-name">Corners</div>
+                    <div class="stat-labels"><span id="homeCorners">0</span><span id="awayCorners">0</span></div>
+                    <div class="stat-bar-bg">
+                        <div class="stat-bar-home" id="homeCornersBar" style="width: 50%;"></div>
+                        <div class="stat-bar-away" id="awayCornersBar" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Yellow Cards -->
+                <div class="stat-row">
+                    <div class="stat-name">Yellow Cards</div>
+                    <div class="stat-labels"><span id="homeYellows">0</span><span id="awayYellows">0</span></div>
+                    <div class="stat-bar-bg">
+                        <div class="stat-bar-home" id="homeYellowsBar" style="width: 50%;"></div>
+                        <div class="stat-bar-away" id="awayYellowsBar" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Red Cards -->
+                <div class="stat-row">
+                    <div class="stat-name">Red Cards</div>
+                    <div class="stat-labels"><span id="homeReds">0</span><span id="awayReds">0</span></div>
+                    <div class="stat-bar-bg">
+                        <div class="stat-bar-home" id="homeRedsBar" style="width: 50%;"></div>
+                        <div class="stat-bar-away" id="awayRedsBar" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Offsides -->
+                <div class="stat-row">
+                    <div class="stat-name">Offsides</div>
+                    <div class="stat-labels"><span id="homeOffsides">0</span><span id="awayOffsides">0</span></div>
+                    <div class="stat-bar-bg">
+                        <div class="stat-bar-home" id="homeOffsidesBar" style="width: 50%;"></div>
+                        <div class="stat-bar-away" id="awayOffsidesBar" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Fouls Committed -->
+                <div class="stat-row">
+                    <div class="stat-name">Fouls</div>
+                    <div class="stat-labels"><span id="homeFouls">0</span><span id="awayFouls">0</span></div>
+                    <div class="stat-bar-bg">
+                        <div class="stat-bar-home" id="homeFoulsBar" style="width: 50%;"></div>
+                        <div class="stat-bar-away" id="awayFoulsBar" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function switchWidgetView(viewName) {
+            document.querySelectorAll('.widget-view').forEach(v => v.classList.remove('active'));
+            if (viewName === 'stats') {
+                document.getElementById('statsView').classList.add('active');
+            } else {
+                document.getElementById('liveView').classList.add('active');
+            }
+        }
+
+        function getContrastTextColor(hexColor) {
+            if (!hexColor) return '#ffffff';
+            hexColor = hexColor.replace('#', '');
+            if (hexColor.length === 3) hexColor = hexColor.split('').map(c => c + c).join('');
+            const r = parseInt(hexColor.substr(0, 2), 16);
+            const g = parseInt(hexColor.substr(2, 2), 16);
+            const b = parseInt(hexColor.substr(4, 2), 16);
+            const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+            return yiq >= 128 ? '#0f172a' : '#ffffff';
+        }
+
+        try {
+            const firebaseConfig = {
+                databaseURL: "https://pitchside-football-scout-default-rtdb.asia-southeast1.firebasedatabase.app"
+            };
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+
+            const matchId = localStorage.getItem('activeMatchId');
+            const dbRef = firebase.database();
+
+            if (matchId) {
+                bindMatch(matchId);
+            } else {
+                dbRef.ref('matches').once('value').then((snapshot) => {
+                    const matches = snapshot.val();
+                    if (matches) {
+                        const keys = Object.keys(matches);
+                        bindMatch(keys[keys.length - 1]);
+                    } else {
+                        document.getElementById('widgetLatestEvent').innerText = 'No active matches found';
+                    }
+                });
+            }
+
+            function bindMatch(id) {
+                dbRef.ref(`matches/${id}`).on('value', (snapshot) => {
+                    const matchData = snapshot.val();
+                    if (!matchData) {
+                        document.getElementById('widgetLatestEvent').innerText = 'Match ended or removed';
+                        return;
+                    }
+
+                    const leagueName = matchData.league || 'Goa Professional League';
+                    const homeName = matchData.homeTeam || 'Home';
+                    const awayName = matchData.awayTeam || 'Away';
+                    const hScore = matchData.homeScore !== undefined ? matchData.homeScore : 0;
+                    const aScore = matchData.awayScore !== undefined ? matchData.awayScore : 0;
+                    
+                    const homeColor = matchData.homeColor || '#2563eb';
+                    const awayColor = matchData.awayColor || '#dc2626';
+
+                    // Update Live UI
+                    document.getElementById('tournamentTitle').innerText = leagueName;
+                    document.getElementById('widgetHomeName').innerText = homeName;
+                    document.getElementById('widgetAwayName').innerText = awayName;
+                    document.getElementById('widgetScore').innerText = `${hScore}-${aScore}`;
+                    document.getElementById('widgetTimer').innerText = matchData.timer || '00:00';
+
+                    // Apply Dynamic Team Colors to Statistics Header Tags
+                    const statHomeLabel = document.getElementById('statHomeLabel');
+                    const statAwayLabel = document.getElementById('statAwayLabel');
+
+                    statHomeLabel.innerText = homeName;
+                    statHomeLabel.style.backgroundColor = homeColor;
+                    statHomeLabel.style.color = getContrastTextColor(homeColor);
+
+                    statAwayLabel.innerText = awayName;
+                    statAwayLabel.style.backgroundColor = awayColor;
+                    statAwayLabel.style.color = getContrastTextColor(awayColor);
+
+                    document.getElementById('statScoreDisplay').innerText = `${hScore} - ${aScore}`;
+
+                    // Apply Dynamic Team Colors to Statistical Bars
+                    document.querySelectorAll('.stat-bar-home').forEach(bar => bar.style.backgroundColor = homeColor);
+                    document.querySelectorAll('.stat-bar-away').forEach(bar => bar.style.backgroundColor = awayColor);
+
+                    if (matchData.events && matchData.events.length > 0) {
+                        let latest = matchData.events[0];
+                        document.getElementById('widgetLatestEvent').innerText = `${latest.team} - ${latest.type} (${latest.time})`;
+                        
+                        // Compute Statistics Dynamically from Events Feed
+                        calculateAndUpdateStats(matchData.events, homeName, awayName);
+                    } else {
+                        document.getElementById('widgetLatestEvent').innerText = 'Match Live';
+                    }
+                });
+            }
+
+            function calculateAndUpdateStats(events, homeName, awayName) {
+                const stats = {
+                    Home: { pressureWeight: 2, shots: 0, shotsOn: 0, corners: 0, yellows: 0, reds: 0, offsides: 0, fouls: 0 },
+                    Away: { pressureWeight: 2, shots: 0, shotsOn: 0, corners: 0, yellows: 0, reds: 0, offsides: 0, fouls: 0 }
+                };
+
+                events.forEach(e => {
+                    let side = (e.team === homeName || e.side === 'Home') ? 'Home' : 'Away';
+                    let type = (e.type || '').toLowerCase();
+
+                    if (type.includes('attack')) stats[side].pressureWeight += 3;
+                    if (type.includes('danger')) stats[side].pressureWeight += 4;
+                    if (type.includes('goal') || type.includes('shot on')) stats[side].pressureWeight += 4;
+                    if (type.includes('corner')) stats[side].pressureWeight += 3;
+
+                    if (type.includes('shot on') || type.includes('goal') || type.includes('penalty goal')) {
+                        stats[side].shots++;
+                        stats[side].shotsOn++;
+                    } else if (type.includes('shot off') || type.includes('woodwork')) {
+                        stats[side].shots++;
+                    } else if (type.includes('corner')) {
+                        stats[side].corners++;
+                    } else if (type.includes('yellow card') || type.includes('2nd yellow')) {
+                        stats[side].yellows++;
+                    } else if (type.includes('red card')) {
+                        stats[side].reds++;
+                    } else if (type.includes('offside')) {
+                        stats[side].offsides++;
+                    } else if (type.includes('foul') || type.includes('free-kick')) {
+                        stats[side].fouls++;
+                    }
+                });
+
+                // Calculate Possession Percentages
+                const totalPressure = stats.Home.pressureWeight + stats.Away.pressureWeight;
+                let homePoss = Math.round((stats.Home.pressureWeight / totalPressure) * 100);
+                let awayPoss = 100 - homePoss;
+
+                // Update Possession DOM
+                document.getElementById('homePossession').innerText = `${homePoss}%`;
+                document.getElementById('awayPossession').innerText = `${awayPoss}%`;
+                document.getElementById('homePossessionBar').style.width = `${homePoss}%`;
+                document.getElementById('awayPossessionBar').style.width = `${awayPoss}%`;
+
+                // Update Other Stats DOM Elements & Proportional Bars
+                updateStatMetric(stats.Home.shots, stats.Away.shots, 'homeShots', 'awayShots', 'homeShotsBar', 'awayShotsBar');
+                updateStatMetric(stats.Home.shotsOn, stats.Away.shotsOn, 'homeShotsOn', 'awayShotsOn', 'homeShotsOnBar', 'awayShotsOnBar');
+                updateStatMetric(stats.Home.corners, stats.Away.corners, 'homeCorners', 'awayCorners', 'homeCornersBar', 'awayCornersBar');
+                updateStatMetric(stats.Home.yellows, stats.Away.yellows, 'homeYellows', 'awayYellows', 'homeYellowsBar', 'awayYellowsBar');
+                updateStatMetric(stats.Home.reds, stats.Away.reds, 'homeReds', 'awayReds', 'homeRedsBar', 'awayRedsBar');
+                updateStatMetric(stats.Home.offsides, stats.Away.offsides, 'homeOffsides', 'awayOffsides', 'homeOffsidesBar', 'awayOffsidesBar');
+                updateStatMetric(stats.Home.fouls, stats.Away.fouls, 'homeFouls', 'awayFouls', 'homeFoulsBar', 'awayFoulsBar');
+            }
+
+            function updateStatMetric(homeVal, awayVal, homeSpanId, awaySpanId, homeBarId, awayBarId) {
+                document.getElementById(homeSpanId).innerText = homeVal;
+                document.getElementById(awaySpanId).innerText = awayVal;
+
+                const total = homeVal + awayVal;
+                let homePct = 50;
+                let awayPct = 50;
+
+                if (total > 0) {
+                    homePct = (homeVal / total) * 100;
+                    awayPct = (awayVal / total) * 100;
+                }
+
+                document.getElementById(homeBarId).style.width = `${homePct}%`;
+                document.getElementById(awayBarId).style.width = `${awayPct}%`;
+            }
+
+        } catch (e) {
+            console.error("Widget Error: " + e.message);
+        }
+    </script>
+</body>
+</html>
